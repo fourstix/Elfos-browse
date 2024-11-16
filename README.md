@@ -22,9 +22,9 @@ Elf/OS Browse Commands
 <tr><td >Ctrl+M, Enter</td><td>Move down to the next line.</td></tr>
 <tr><td>Ctrl+N, PgDn</td><td>Next screen</td></tr>
 <tr><td>Ctrl+P, PgUp</td><td>Previous screen</td></tr>
-<tr><td>Ctrl+Q</td><td rowspan="2">Quit</td></tr>
-<tr><td>Ctrl+S</td></tr>
+<tr><td>Ctrl+Q</td><td>Quit</td></tr>
 <tr><td>Ctrl+R, Right</td><td>Move cursor Right</td></tr>
+<tr><td>Ctrl+S</td><td>Quit</td></tr>
 <tr><td>Ctrl+T</td><td>Move to Top of file or buffer</td></tr>
 <tr><td>Ctrl+U, Up</td><td>Move cursor Up</td></tr>
 <tr><td>Ctrl+W</td><td>show Where cursor is located in file</td></tr>
