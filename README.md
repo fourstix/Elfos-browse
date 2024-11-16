@@ -19,12 +19,12 @@ Elf/OS Browse Commands
 <tr><td>Ctrl+G</td><td>Go to line number</td></tr
 <tr><td>Ctrl+I, Tab</td><td>Move forward to next tab stop</td></tr>
 <tr><td>Ctrl+L, Left</td><td>Move cursor Left</td></tr>
-<tr><td rowspan="2">Ctrl+M, Enter</td><td>Move down to the next line.</td></tr>
+<tr><td >Ctrl+M, Enter</td><td>Move down to the next line.</td></tr>
 <tr><td>Ctrl+N, PgDn</td><td>Next screen</td></tr>
 <tr><td>Ctrl+P, PgUp</td><td>Previous screen</td></tr>
-<tr><td>Ctrl+Q</td><td>Quit</td></tr>
+<tr><td>Ctrl+Q</td rowspan="2"><td>Quit</td></tr>
+<tr><td>Ctrl+S</td></tr>
 <tr><td>Ctrl+R, Right</td><td>Move cursor Right</td></tr>
-<tr><td>Ctrl+S</td><td>Quit</td></tr>
 <tr><td>Ctrl+T</td><td>Move to Top of file or buffer</td></tr>
 <tr><td>Ctrl+U, Up</td><td>Move cursor Up</td></tr>
 <tr><td>Ctrl+W</td><td>show Where cursor is located in file</td></tr>
@@ -37,9 +37,14 @@ Elf/OS Browse Commands
 
 Note:  On older DEC video terminals the Ctrl+_ key combination replaces the Ctrl+? combination key for help.  Some emulators may support one or the other or both.
 
-Text Buffers
+Text Limits
 -----------
+* Lines can have up to 124 characters per line
 * Tabs are defined as 4 character tab stops (1, 5, 9, etc.)
+
+
+File Buffers
+------------
 * Files of any size can be viewed
 * Buffers are used to view files larger than 96 lines 
 * The browse program can track up to 32 buffer locations in the file
