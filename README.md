@@ -28,7 +28,6 @@ Elf/OS Browse Commands
 <tr><td>Ctrl+T</td><td>Move to Top of file or buffer</td></tr>
 <tr><td>Ctrl+U, Up</td><td>Move cursor Up</td></tr>
 <tr><td>Ctrl+W</td><td>show Where cursor is located in file</td></tr>
-<tr><td>Ctrl+Y</td><td>Save As new file</td></tr>
 <tr><td>Ctrl+Z</td><td>Move to bottom of file or buffer</td></tr>
 <tr><td>Ctrl+], Shift+Tab</td><td>Move back to previous tab stop</td></tr>
 <tr><td>Ctrl+?</td><td rowspan="2">Show help information</td></tr>
