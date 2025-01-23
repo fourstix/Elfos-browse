@@ -3,7 +3,7 @@ A read-only full-screen file viewing utility for the Elf/OS written in 1802 Asse
 
 Platform
 --------
-The Elf/OS browse program was written for an 1802 based Microcomputer running the Elf/OS operating system, such as the [Pico/Elf](http://www.elf-emulation.com/picoelf.html) by Mike Riley or the [1802-Mini](https://github.com/dmadole/1802-Mini) by David Madole or the [AVI Elf II](https://github.com/awasson/AVI-ELF-II) by Ed Keefe. A lot of information and software for the Pico/Elf, the 1802-Mini and the AVI Elf II can be found on the [Elf-Emulation](http://www.elf-emulation.com/) website and in the [COSMAC ELF Group](https://groups.io/g/cosmacelf) at groups.io.
+The Elf/OS browse program was written for an 1802 based Microcomputer running the [Elf/OS](https://github.com/rileym65/ElfosV5) operating system or the [Mini/DOS](https://github.com/dmadole/MiniDOS-kernel) operating system, such as the [Pico/Elf](http://www.elf-emulation.com/picoelf.html) by Mike Riley or the [1802-Mini](https://github.com/dmadole/1802-Mini) by David Madole or the [AVI Elf II](https://github.com/awasson/AVI-ELF-II) by Ed Keefe. A lot of information and software for the Pico/Elf, the 1802-Mini and the AVI Elf II can be found on the [Elf-Emulation](http://www.elf-emulation.com/) website and in the [COSMAC ELF Group](https://groups.io/g/cosmacelf) at groups.io.
 
 The Elf/OS browse program source files were assembled and linked with updated versions of the Asm-02 assembler and Link-02 linker by Mike Riley. The updated versions required to assemble and link this code are available at [fourstix/Asm-02](https://github.com/fourstix/Asm-02) and [fourstix/Link-02](https://github.com/fourstix/Link-02).
 
@@ -13,25 +13,23 @@ Elf/OS Browse Commands
 <table>
 <tr><th>Keys</th><th>Command</th></tr>
 <tr><td>Ctrl+B, Home</td><td>Move to the Beginning of line</td></tr>
-<tr><td>Ctrl+D, Down</td><td>Move cursor Down</td></tr>
+<tr><td>Ctrl+D, Ctrl-N, Down</td><td>Move cursor Down</td></tr>
 <tr><td>Ctrl+E, End</td><td>Move to End of line</td></tr>
 <tr><td>Ctrl+F</td><td>Find text</td></tr>
 <tr><td>Ctrl+G</td><td>Go to line number</td></tr
 <tr><td>Ctrl+I, Tab</td><td>Move forward to next tab stop</td></tr>
-<tr><td>Ctrl+L, Left</td><td>Move cursor Left</td></tr>
+<tr><td>Ctrl+L, Ctrl-J, Left</td><td>Move cursor Left</td></tr>
 <tr><td >Ctrl+M, Enter</td><td>Move down to the next line.</td></tr>
-<tr><td>Ctrl+N, PgDn</td><td>Next screen</td></tr>
+<tr><td>Ctrl+O, PgDn</td><td>Next screen</td></tr>
 <tr><td>Ctrl+P, PgUp</td><td>Previous screen</td></tr>
-<tr><td>Ctrl+Q</td><td>Quit</td></tr>
-<tr><td>Ctrl+R, Right</td><td>Move cursor Right</td></tr>
-<tr><td>Ctrl+S</td><td>Quit</td></tr>
+<tr><td>Ctrl+X</td><td>Exit</td></tr>
+<tr><td>Ctrl+R, Ctrl-K, Right</td><td>Move cursor Right</td></tr>
 <tr><td>Ctrl+T</td><td>Move to Top of file or buffer</td></tr>
 <tr><td>Ctrl+U, Up</td><td>Move cursor Up</td></tr>
 <tr><td>Ctrl+W</td><td>show Where cursor is located in file</td></tr>
 <tr><td>Ctrl+Z</td><td>Move to bottom of file or buffer</td></tr>
 <tr><td>Ctrl+], Shift+Tab</td><td>Move back to previous tab stop</td></tr>
-<tr><td>Ctrl+?</td><td rowspan="2">Show help information</td></tr>
-<tr><td>Ctrl+_ (See Note)</td>
+<tr><td>Ctrl+?, Ctrl-^ (See Note)</td><td>Show help information</td></tr>
 </table>
 
 Note:  On older DEC video terminals the Ctrl+_ key combination replaces the Ctrl+? combination key for help.  Some emulators may support one or the other or both.
@@ -45,9 +43,9 @@ Text Limits
 File Buffers
 ------------
 * Files of any size can be viewed
-* Buffers are used to view files larger than 96 lines 
+* Buffers are used to view files larger than 120 lines 
 * The browse program can track up to 32 buffer locations in the file
-* The browse program will seek the next buffer location and load up to 96 lines into memory
+* The browse program will seek the next buffer location and load up to 120 lines into memory
 * Buffer location tracking will roll over after 32 so that buffer 33 is the first buffer location
 * Moving backwards, past the first tracked buffer location, will rewind to buffer zero 
 * The zero buffer is always the beginning of the file
@@ -123,19 +121,23 @@ All libraries used in this code are copyright their respective authors.
 This code is based on a Elf/OS kernel written by Mike Riley and created with the Asm/02 assembler and Link/02 linker also written by Mike Riley.
 
 Elf/OS 
-Copyright (c) 2004-2024 by Mike Riley
+Copyright (c) 2004-2025 by Mike Riley
+
+Mini/DOS 
+Copyright (c) 2024-2025 by David Madole
+
 
 Kilo Editor 
-Copyright (c) 2016-2024 by Salvatore Sanfilippo
+Copyright (c) 2016-2025 by Salvatore Sanfilippo
 
 Elf-Elfos-Edit 
-Copyright (c) 2004-2024 by Mike Riley
+Copyright (c) 2004-2025 by Mike Riley
 
 Asm/02 1802 Assembler 
-Copyright (c) 2004-2024 by Mike Riley
+Copyright (c) 2004-2025 by Mike Riley
 
 Link/02 1802 Linker 
-Copyright (c) 2004-2024 by Mike Riley
+Copyright (c) 2004-2025 by Mike Riley
 
 VT102 User Guide 
 Copyright (c) 1982 by Digital Equipment Corporation
@@ -146,7 +148,7 @@ This code, firmware, and software is released under the [MIT License](http://ope
 
 The MIT License (MIT)
 
-Copyright (c) 2024 by Gaston Williams
+Copyright (c) 2025 by Gaston Williams
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
