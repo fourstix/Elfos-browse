@@ -9,7 +9,7 @@
 ; Also based on the Elf/OS edit program written by Michael H Riley
 ; available https://github.com/rileym65/Elf-Elfos-edit
 ; -------------------------------------------------------------------
-; Copyright 2021 by Gaston Williams
+; Copyright 2025 by Gaston Williams
 ; -------------------------------------------------------------------
 ; Based on software written by Michael H Riley
 ; Thanks to the author for making this code available.
@@ -29,7 +29,6 @@
 
             extrn   textbuf
             extrn   curline
-;            extrn   fildes
             extrn   k_dta
             extrn   readln
             extrn   readbyte
@@ -67,7 +66,7 @@ feob_lp:    lda   ra            ; get count
             inc   r8            ; increment line count
             lbr   feob_lp
 feob_done:  dec   ra            ; move back to end of buffer byte
-;            call  check_page    ; check for out of memory to set flag
+            call  check_page    ; check for out of memory to set flag
             return              ; and return
             endp
 
@@ -114,11 +113,6 @@ feob_done:  dec   ra            ; move back to end of buffer byte
             return              ; and return
             endp
                        
-; *************************************
-; *** Find line in text buffer      ***
-; *** R8 - line number              ***
-; *** Returns: RA - pointer to line ***
-; *************************************
             ;-------------------------------------------------------
             ; Name: find_line
             ;
@@ -269,6 +263,7 @@ fs_exit:    pop   r9              ; restore registers
             ;   ra.0 = count of lines
             ;   DF = 1 - new file
             ;   DF = 0 - file loaded into buffer
+            ;   (ERROR_BIT set if out of memory error)
             ;-------------------------------------------------------                       
             proc  load_buffer
             push  rf            ; save registers used    
@@ -293,11 +288,6 @@ loadlp:     push  rf            ; save buffer address
             call  readln        ; read next line
             lbdf  loadeof       ; jump if eof was found
 
-;            glo   rc            ; get count
-;            lbnz  loadnz        ; jump if bytes were read
-;            pop   rf            ; recover buffer
-;            lbr   loadlp        ; loop back and read another line
-
 loadnz:     ldi   13            ; write cr/lf to buffer
             str   rf
             inc   rf
@@ -317,6 +307,14 @@ loadnz:     ldi   13            ; write cr/lf to buffer
             adci   0
             phi   rf
             inc   ra            ; bump line count
+            
+            ;----- check to see if we are out of memory  
+            push  ra            ; save line count
+            copy  rf, ra        ; check the current page
+            call  check_page    ; check that page is within memory
+            pop   ra            ; restore ra after check
+            lbdf  loaderr       ; if out of memory, terminate
+
             ; check for max line count for buffer
             glo   ra
             smi   BUF_LINES
@@ -325,10 +323,6 @@ loadnz:     ldi   13            ; write cr/lf to buffer
             call  count_buf     ; increment the buffer count, if needed
             call  mark_buffer   ; save location of next buffer 
 
-            
-;            copy  rf, ra        ; check the current page
-;            call  check_page    ; check that page is within memory
-;            lbdf  loaddn        ; if out of memory, terminate
             lbr   loaddn
             
 loadeof:    pop   rf            ; recover buffer address
@@ -360,6 +354,16 @@ new_kfile:  pop   r7            ; restore registers
             pop   rd
             pop   rf
             return
+            
+loaderr:    ldi   0             ; write termination
+            str   rf
+            call  o_close       ; close the file
+            load  rf, e_state   ; get state byte
+            ldn   rf
+            ori   ERROR_BIT     ; set ERROR_BIT
+            str   rf            ; save 
+            clc  
+            lbr   new_kfile     ; exit
             endp
 
             
@@ -455,10 +459,10 @@ readbno:    ldi   1
             ;-------------------------------------------------------
             ; Name: skipln
             ;
-            ; Read a line from a file
+            ; Read a line from a file without saving to a buffer
             ;
             ; Parameters
-            ;   rf - pointer to text buffer
+            ;   (none)
             ; Uses:
             ;   rc - byte count    
             ; Returns:
@@ -466,20 +470,34 @@ readbno:    ldi   1
             ;   DF = 1, end of file encountered
             ;-------------------------------------------------------            
             proc  skipln
+            ldi   0             ; set byte count
+            phi   rc
+            plo   rc
 skipln1:    call  readbyte      ; read a byte
             lbdf  skiplneof     ; jump on eof
 
             plo   re            ; keep a copy
-            smi   32            ; look for anything below a space
-            lbnf  skipln1
+            smi   10            ; look for first newline
+            lbz   skipln2       ; go to possible blank line
+            smi   22            ; look for anything else below a space
+            lbnf  skipln1       ; skip over any other control characters
+            lbr   skipln3       ; otherwise, process printable characters
             
-skipln2:    glo   re            ; recover byte
-            call  readbyte      ; read next byte
+skipln2:    call  readbyte      ; read a byte
+            lbdf  skiplneof     ; jump on eof
+            plo   re            ; keep a copy
+            
+            smi   10            ; look for second newline
+            lbz   skipln4       ; exit on blank line
+            smi   22            ; look for anything else below a space
+            lbnf  skipln2       ; skip over any other control characters
+                            
+skipln3:    call  readbyte      ; read next byte
             lbdf  skiplneof     ; jump if end of file
             plo   re            ; keep a copy of read byte
             smi   32            ; make sure it is positive
-            lbdf  skipln2       ; loop back on valid characters
-            ldi   0             ; signal valid read
+            lbdf  skipln3       ; loop back on valid characters
+skipln4:    ldi   0             ; signal valid read
 skiplncnt:  shr                 ; shift into DF
             return              ; and return to caller
 skiplneof:  ldi   1             ; signal eof
@@ -519,11 +537,7 @@ skiplneof:  ldi   1             ; signal eof
 skiplp:     call  skipln        ; skip next line
             lbdf  skipeof       ; jump if eof was found
 
-            glo   rc            ; get count
-            lbnz  skipnz        ; jump if bytes were read
-            lbr   skiplp        ; loop back and read another line
-
-skipnz:     dec   ra            ; bump line count
+            dec   ra            ; bump line count
             ; check for max line count for buffer
             ghi   ra
             lbnz  skiplp        ; skip to maximum of lines
@@ -558,243 +572,6 @@ skip_err:   pop   r7            ; restore registers
             endp
 
             ;-------------------------------------------------------
-            ; Name: save_buffer
-            ;
-            ; Save the text buffer to a file.
-
-            ; Parameters: (file name in fname buffer) 
-            ; Uses:
-            ;   rf - pointer to text bytes
-            ;   rd - pointer to file descripter
-            ;   rc - byte count
-            ;   r7.0 - flags register
-            ; Returns: 
-            ;   DF = 0, buffer saved successfully
-            ;   DF = 1, an error occurred when saving buffer
-            ;-------------------------------------------------------                       
-;            proc  save_buffer    
-;            push  rf              ; save registers used in save
-;            push  rd
-;            push  rc
-;            push  r7
-;
-;            load  rf, fname     ; point to filename
-;            load  rd, fildes    ; point to file descriptor
-;            ldi   3             ; flags for open, create, truncate
-;            plo   r7
-;            call  o_open        ; open the file
-;            lbdf  save_exit     ; if we can't open file exit with error
-;            
-;            load  rf, textbuf   ; point to text buffer
-;savelp:     ldn   rf            ; get length byte
-;            lbz   savedn        ; jump if done
-;
-;            push  rf            ; save buffer position
-;            lda   rf            ; get length byte
-;            plo   rc
-;            ldi   0             ; clear high byte of count
-;            phi   rc
-;            call   o_write      ; write the line
-;            pop   rf            ; recover buffer
-;            lbdf  save_err      ; if we had a write error, exit
-;            
-;            lda   rf            ; get length byte
-;            str   r2            ; and add to position
-;            glo   rf
-;            add
-;            plo   rf
-;            ghi   rf
-;            adci  0
-;            phi   rf
-;            lbr   savelp        ; loop back for next line
-;
-;save_err:   call  o_close       ; attempt to close open file
-;            stc                 ; set DF=1 for error
-;            lbr   save_exit     ; exit with error
-;            
-;savedn:     call  o_close       ; close the file
-;            call  clr_file_bits ; clear the dirty flag and new flag bits
-;            clc                 ; clear DF flag for successful return
-;save_exit:  pop   r7            ; restore registers used
-;            pop   rc
-;            pop   rd
-;            pop   rf 
-;            return 
-;            endp
-
-
-            ;-------------------------------------------------------
-            ; Name: insert_line
-            ;
-            ; Insert a line of text into the text buffer.
-
-            ; Parameters: 
-            ;   rf - pointer to text string
-            ;   ra - pointer to current line
-            ;   r8 - current line number
-            ; Uses:
-            ;   rd - destination pointer to text buffer
-            ;   rc.0 - byte count
-            ;   r9 - source pointer
-            ;
-            ; Returns:
-            ;   DF = 1, out of memory error
-            ;   r8 - new current line number
-            ;-------------------------------------------------------                       
-;            proc  insert_line
-;            push  rd            ; save registers used
-;            push  rc
-;            push  r9
-;            
-;insertln:   ldi   0             ; setup count
-;            plo   rc
-;            phi   rc
-;            push  rf            ; save buffer psition
-;insertlp1:  inc   rc            ; increment count
-;            lda   rf            ; get next byte
-;            lbnz  insertlp1
-;            glo   rc            ; get count + 1 for size byte
-;            stxd                ; and save it
-;            call  find_eob      ; find end of buffer
-;            lbdf  ins_err       ; if out of memory, exit with error
-;            glo   rc            ; add in count to get destination
-;            str   r2
-;            glo   ra
-;            plo   r9
-;            add
-;            plo   rd
-;            ghi   ra
-;            phi   r9            ; r9 points to end of old buffer
-;            adci  0
-;            phi   rd            ; rd point to end of new buffer     
-;            call  getcurln      ; get current line number
-;            call  find_line     ; find address of line
-;insertlp2:  ldn   r9            ; read source byte from end
-;            str   rd            ; place into destination
-;            glo   ra            ; check for completion
-;            str   r2
-;            glo   r9
-;            sm
-;            lbnz  inslp2c
-;            ghi   ra            ; check for completion
-;            str   r2
-;            ghi   r9
-;            sm
-;            lbnz  inslp2c
-;            lbr   inslp2d
-;inslp2c:    dec   r9            ; decrement positions
-;            dec   rd
-;            lbr   insertlp2     ; keep going until r9 = ra
-;inslp2d:    call  getcurln      ; get current line number
-;            call  find_line     ; find address of line
-;            irx                 ; recover count
-;            ldx
-;            smi    1            ; subtract out length byte from count
-;            str   ra            ; store into buffer
-;            inc   ra            ; point ra to next byte in buffer
-;            plo   rc            ; put into count
-;            pop   rf            ; recover input buffer
-;insertlp3:  glo   rc            ; get count
-;            lbz   insertdn      ; jump if done
-;            lda   rf            ; get byte from input
-;            str   ra            ; store into text buffer
-;            inc   ra
-;            dec   rc            ; decrement count
-;            lbr   insertlp3     ; loop back until done
-;insertdn:   call  getcurln      ; get current line number
-;            
-;            call  set_dirty     ; set the dirty bit after buffer change            
-;            clc                 ; show success (DF = 0)  
-;ins_err:    pop   r9            ; restore registers used
-;            pop   rc
-;            pop   rd
-;            return              ; return to caller
-;            endp
-            
-            ;-------------------------------------------------------
-            ; Name: delete_line
-            ;
-            ; Delete current line from text buffer.
-
-            ; Parameters:  
-            ;   r8 - current line number
-            ;   ra - pointer to current line
-            ; Uses:
-            ;   rd - destination pointer
-            ;   rc - byte count
-            ; Returns: 
-            ;   DF = 0, if deleted
-            ;   DF = 1, if not deleted
-            ;   r8 - new currrent line
-            ;-------------------------------------------------------                       
-
-;            proc  delete_line
-;            push  rd            ; save registers used
-;            push  rc
-;kill:       call  find_line     ; check if exists
-;            lbdf  killquit
-;            ghi   ra            ; save dest pointer
-;            phi   rd
-;            glo   ra
-;            plo   rd
-;            inc   r8            ; move to next line
-;            call  find_line     ; get address for line
-;killline:   ldn   ra            ; get length to next line
-;            lbz   killdone
-;            adi   1
-;            plo   rc
-;killloop:   lda   ra            ; get source byte
-;            str   rd            ; place into destintion
-;            inc   rd
-;            dec   rc            ; decrement count
-;            glo   rc            ; get count
-;            lbnz  killloop      ; loop until line is done
-;            lbr   killline      ; and loop for next line
-;killdone:   str   rd
-;            call  set_dirty     ; set the dirty bit after buffer change
-;            clc            
-;killquit:   call  getcurln      ; set r8 back to current line
-;            pop   rc            ; restore registers
-;            pop   rd    
-;            return
-;            endp      
-            
-            ;-------------------------------------------------------
-            ; Name: update_line
-            ;
-            ; If the current line exists, insert a line of new text
-            ; into the text buffer as the current line and delete
-            ; the old line of text.  If the current line is not in  
-            ; the buffer, append text to end of buffer. 
-            ;
-            ; Parameters: 
-            ;   rf - pointer to new text string
-            ;   r8 - current line number
-            ; Uses:
-            ;   ra - pointer to current line
-            ;   r8 - current line number
-            ;
-            ; Returns:
-            ;   DF = 0, line is updated
-            ;   DF = 1, new line appended to buffer
-            ;   r8 - new current line number
-            ;-------------------------------------------------------                       
-;            proc  update_line
-;            call  find_line     ; check current line
-;            call  insert_line   ; insert new text
-;            
-;            inc   r8            ; move to the previous line number
-;            call  setcurln      ; and save it for delete
-;            
-;            call  delete_line   ; delete the previous line of text
-;            dec   r8            ; move back to new line
-;            call  setcurln      ; save it for refresh
-;            clc                 ; clear DF to indicate line updated
-;            return
-;            endp
-
-
-            ;-------------------------------------------------------
             ; Name: set_page
             ;
             ; Set the memory limit one page below the heap
@@ -805,28 +582,28 @@ skip_err:   pop   r7            ; restore registers
             ;   rd - memory address
             ; Returns: (None) 
             ;-------------------------------------------------------
-;            proc  set_page
-;            push  rf          ; save registers
-;            push  rd  
-;            
-;            load  rf, K_HEAP    ; point to address for heap
-;            
-;            lda   rf            ; get hi byte of address
-;            phi   rd            ; put in rd
-;            lda   rf            ; get lo byte of address
-;            plo   rd            ; rd points to bottom of heap
-;            dec   rd            ; free memory is one byte below heap
-;
-;            load  rf, pageLimit ; point to memory limit variable
-;            
-;            ghi   rd            ; get page value of memory
-;            smi   1             ; limit is one page below memory
-;            str   rf            ; save limit in memory
-;            
-;            pop   rd          ; restore registers
-;            pop   rf
-;            return
-;            endp
+            proc  set_page
+            push  rf          ; save registers
+            push  rd  
+            
+            load  rf, K_HEAP    ; point to address for heap
+            
+            lda   rf            ; get hi byte of address
+            phi   rd            ; put in rd
+            lda   rf            ; get lo byte of address
+            plo   rd            ; rd points to bottom of heap
+            dec   rd            ; free memory is one byte below heap
+
+            load  rf, pageLimit ; point to memory limit variable
+            
+            ghi   rd            ; get page value of memory
+            smi   1             ; limit is one page below memory
+            str   rf            ; save limit in memory
+            
+            pop   rd          ; restore registers
+            pop   rf
+            return
+            endp
 
             ;-------------------------------------------------------
             ; Name: check_page
@@ -841,17 +618,17 @@ skip_err:   pop   r7            ; restore registers
             ;   DF = 1, memory limit reached (page >= limit)
             ;   DF = 0, withim limit (page < limit)
             ;-------------------------------------------------------
-;            proc  check_page
-;            push  rf
-;            load  rf, pageLimit   ; get memory limit
-;            ldn   rf              ; load memory limit value
-;            str   r2              ; put limit in M(X) 
-;            
-;            ghi   ra              ; get page for end of text buffer
-;            sm                    ; subtract limit from current page 
-;            pop   rf
-;            return
-;            endp
+            proc  check_page
+            push  rf
+            load  rf, pageLimit   ; get memory limit
+            ldn   rf              ; load memory limit value
+            str   r2              ; put limit in M(X) 
+            
+            ghi   ra              ; get page for end of text buffer
+            sm                    ; subtract limit from current page 
+            pop   rf
+            return
+            endp
             
             ; ***************************************
             ; ***      File and Data Buffers      ***
@@ -871,9 +648,9 @@ skip_err:   pop   r7            ; restore registers
               db      0,0,0,0
             endp  
 
-;            proc  pageLimit
-;              db      0         ; one page below heap
-;            endp
+            proc  pageLimit
+              db      0         ; one page below heap
+            endp
   
             proc  curline
               dw      0         ; current line variable
