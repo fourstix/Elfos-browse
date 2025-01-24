@@ -9,7 +9,7 @@
 ; Also based on the Elf/OS edit program written by Michael H Riley
 ; available https://github.com/rileym65/Elf-Elfos-edit
 ; -------------------------------------------------------------------
-; Copyright 2024 by Gaston Williams
+; Copyright 2025 by Gaston Williams
 ; -------------------------------------------------------------------
 ; Based on software written by Michael H Riley
 ; Thanks to the author for making this code available.
@@ -26,18 +26,7 @@
 ;-------------------------------------------------------------------------------
 ; Uncomment to enable Debug code 
 ;-------------------------------------------------------------------------------
-; #define  BRWS_DEBUG  1
-
-;-------------------------------------------------------------------------------
-; Uncomment to enable flow control (Xon/Xoff) 
-;-------------------------------------------------------------------------------
-#define  BRWS_FLOW   1
-
-;-------------------------------------------------------------------------------
-; Comment out to remove Help information (about 1K in size) 
-;-------------------------------------------------------------------------------
-#define  BRWS_HELP  1
-
+;#define  BRWS_DEBUG  1
 
 ;-------------------------------------------------------------------------------
 ; Default Screen Size Constants
@@ -67,17 +56,17 @@
 ;-------------------------------------------------------------------------------
 ; Number Lines in single Buffer 
 ;-------------------------------------------------------------------------------
-#define BUF_LINES  96 
+#define BUF_LINES  120
 
 ;-------------------------------------------------------------------------------
 ; Number of Lines in all Buffers (32 * BUF_LINES)
 ;-------------------------------------------------------------------------------
-#define BUF_TOTAL   3072
+#define BUF_TOTAL   3840
 
 ;-------------------------------------------------------------------------------
 ; Number Lines in middle of Buffer (BUF_LINES / 2) 
 ;-------------------------------------------------------------------------------
-#define BUF_MIDDLE  48
+#define BUF_MIDDLE  60
 
 ;-------------------------------------------------------------------------------
 ; Editor State bits
@@ -99,17 +88,8 @@
 #define SAVED_MASK    $6F
 ;---- Mask for clearing refresh and status bits at same time (screen updated)
 #define SCREEN_MASK   $B7
+#define SCREEN_UPDATE $48
 
-
-#ifdef  BRWS_FLOW
-
-;-------------------------------------------------------------------------------
-; Software Flow Control Characters
-;-------------------------------------------------------------------------------
-#define XON   17
-#define XOFF  19
-
-#endif
 
 ;-------------------------------------------------------------------------------
 ; Utility routines used by browser
@@ -140,7 +120,6 @@
             extrn   prt_status
             extrn   pad_line
             extrn   e_state
-;            extrn   line_buf
             extrn   work_buf
             extrn   num_buf
             extrn   set_status
@@ -151,10 +130,7 @@
             extrn   prt_status_dbg
             extrn   prt_find_dbg
             extrn   brws_status
-;            extrn   set_dirty
             extrn   clr_file_bits
-;            extrn   is_dirty
-;            extrn   is_fnchar
             extrn   is_eof
             extrn   found_screen
             extrn   fbuf_cnt
@@ -170,7 +146,6 @@
             extrn   reset_buffers
             extrn   fbuf_offset
             extrn   get_buf_line
-;            extrn   get_buf_num
             extrn   buffer_msg
             extrn   set_buf_index
             extrn   top_buffer
@@ -199,13 +174,6 @@
             extrn   do_enter
             extrn   do_return
             extrn   do_newline
-;            extrn   do_save
-;            extrn   do_kill
-;            extrn   do_split
-;            extrn   do_join
-;            extrn   do_typeover
-;            extrn   do_typein
-;            extrn   do_insline
             extrn   do_top
             extrn   do_bottom
             extrn   do_quit
@@ -213,10 +181,7 @@
             extrn   do_where
             extrn   do_input
             extrn   do_goto
-;            extrn   do_change
             extrn   do_find
-;            extrn   do_copy
-;            extrn   do_paste
             extrn   do_help  
 
 ;-------------------------------------------------------------------------------
@@ -230,13 +195,9 @@
             extrn   fname 
             extrn   load_buffer
             extrn   skip_lines
-;            extrn   save_buffer
-;            extrn   insert_line
-;            extrn   delete_line
-;            extrn   update_line
             extrn   find_string
-;            extrn   set_page
-;            extrn   check_page
+            extrn   set_page
+            extrn   check_page
             extrn    seek_lines
             extrn   fildes
             extrn   f_buffers

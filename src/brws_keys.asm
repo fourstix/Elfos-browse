@@ -9,7 +9,7 @@
 ; Also based on the Elf/OS edit program written by Michael H Riley
 ; available https://github.com/rileym65/Elf-Elfos-edit
 ; -------------------------------------------------------------------
-; Copyright 2021 by Gaston Williams
+; Copyright 2025 by Gaston Williams
 ; -------------------------------------------------------------------
 ; Based on software written by Michael H Riley
 ; Thanks to the author for making this code available.
@@ -39,14 +39,8 @@
             ;-------------------------------------------------------       
             proc  do_browse
             ; reads character until ctrl+q is typed  
-c_loop:
-     
-#ifdef  BRWS_FLOW
-            ldi   XON             
-            call  o_type          ; send xon to make sure transmission is on
-#endif            
             
-            call  o_readkey       ; get a keyvalue 
+c_loop:     call  o_readkey       ; get a keyvalue 
             str   r2              ; save char at M(X)
         
             ; Check for printable or control char
@@ -116,13 +110,7 @@ sq_csi:     call  o_readkey       ; get csi character
             ldx 
             lbr   c_unkn          ; print unknown escape seq message
         
-sq_ok:
-      
-#ifdef  BRWS_FLOW
-            ldi   XOFF            
-            call  o_type          ; turn transmission off in case of repeated ANSI sequences
-#endif            
-            irx                   ; get character from stack 
+sq_ok:      irx                   ; get character from stack 
             ldx
             smi   49              ; check for <Esc>[1~ sequence
             lbz   c_home          ; process Home key
@@ -152,7 +140,7 @@ c_ctrl:     load  rf, c_rpt       ; clear repeated character
             ldx                   ; get control character at M(X)
             smi   2               ; check for Ctrl-B (Home)
             lbz   c_home
-            smi   2               ; check for Ctrl-D (Down Arrow)
+            smi   2               ; check for Ctrl-D (Down)
             lbz   c_dwn  
             smi   1               ; check for Ctrl-E (End)
             lbz   c_end  
@@ -160,45 +148,45 @@ c_ctrl:     load  rf, c_rpt       ; clear repeated character
             lbz   c_find
             smi   1               ; check for Ctrl-G (Go to Line)
             lbz   c_goto
-            smi   2               ; check for Ctrl-I (Tab)
+            smi   1               ; check for Ctrl-H (Backspace)
+            lbz   c_left          ; treat backspace as left arrow
+            smi   1               ; check for Ctrl-I (Tab)
             lbz   c_tab
-            smi   3               ; check for Ctrl-L (Left Arrow)
+            smi   1               ; check for Ctrl-J (Left)
+            lbz   c_left
+            smi   1               ; check for Ctrl-K (Right)
+            lbz   c_rght  
+            smi   1               ; check for Ctrl-L (Left)
             lbz   c_left
             smi   1               ; check for Ctrl-M (Enter)
             lbz   c_enter
-            smi   1               ; check for Ctrl-N (PgDn)
+            smi   1               ; check for Ctrl-N (Down)
+            lbz   c_dwn
+            smi   1               ; check for Ctrl-O (PgDn)  
             lbz   c_pgdn
-            smi   1               ; check for Ctrl-O (Overwrite/Insert)  
-            lbz   c_mode
             smi   1               ; check for Ctrl-P (PgUp)
             lbz   c_pgup
-            smi   1               ; check for Ctrl-Q (Quit)
-            lbz   c_exit          ; just exit
-            smi   1               ; check for Ctrl-R (Right Arrow)
+            smi   2               ; check for Ctrl-R (Right Arrow)
             lbz   c_rght
-            smi   1               ; check for Ctrl-S (Save)
-            lbz   c_exit          ; (No Save) just exit
-            smi   1               ; check for Ctrl-T (Top of File)
+            smi   2               ; check for Ctrl-T (Top of File)
             lbz   c_top          
-            smi   1               ; check for Ctrl-U (Up Arrow)
+            smi   1               ; check for Ctrl-U (Up)
             lbz   c_up
             smi   2               ; check for Ctrl-W (Where)
             lbz   c_where
-            smi   3               ; check for Ctrl-Z (End of File)
+            smi   1               ; check for Ctrl-X (Exit)
+            lbz   c_exit
+            smi   2               ; check for Ctrl-Z (End of File)
             lbz   c_bottom
-            smi   5               ; check for Ctrl-?
+            smi   4               ; check for Ctrl-^
             lbz   c_help
-
-#ifdef  BRWS_DEBUG
-            ldx                 ; get char at M(X) 
-            plo     rd          ; save character in         
-            call    do_ctrl
-#endif            
+            smi   1               ; check for Ctrl-?
+            lbz   c_help
+           
             lbr   c_loop          ; ignore any unknown chracters  
 
             ;----- Control key actions
 c_tab:      call  do_tab
-;            lbr   c_line
             lbr   c_update
             
 c_enter:    call  do_enter
@@ -214,9 +202,6 @@ c_bottom:   call  do_bottom
 c_home:     call  do_home
             lbr   c_update
 
-c_mode:     call  do_mode          ; toggle the editor mode
-            lbr   c_loop
-              
 c_end:      call  do_end
             lbr   c_update
 
@@ -245,12 +230,8 @@ c_unkn:     call  o_type          ; show unknown character in D
 c_unkn:     lbr   c_loop          ; continue processing                   
 #endif
 
-#ifdef  BRWS_HELP
 c_help:     call  do_help         ; show help information
             lbr   c_update        ; refresh screen after help text
-#else 
-c_help:     lbr   c_loop          ; no help implemented
-#endif
             
 ;-----  3 character csi escape sequences
 c_up:       call  do_up
@@ -320,9 +301,6 @@ c_move:     call  o_inmsg
               db 27,'[?25h',0     ; show cursor        
             lbr   c_loop
 
-;c_line:     call  refresh_line    ; update line on screen
-;            lbr   c_update
-
 c_error:    load  rf, mem_err     ; show out of memory error
             call  do_confirm
               
@@ -349,31 +327,6 @@ mem_err:      db '*** Error: Out of Memory ***',0
             return
             endp
 
-            ;-------------------------------------------------------
-            ; Name: do_mode
-            ;
-            ; Toggle the editor mode, insert or overwrite
-            ;
-            ; Parameters: (None)
-            ; Uses: 
-            ;   rf - buffer pointer
-            ; Returns: (None)
-            ;-------------------------------------------------------                      
-            proc  do_mode
-            push  rf              ; save register
-            load  rf, e_state     ; get editor state byte  
-            ldn   rf            
-            xri   MODE_BIT        ; toggle mode mode bit
-            str   rf
-            call  brws_status     ; update status message for new mode
-            call  prt_status
-            call  get_cursor      ; restore cursor
-            call  move_cursor     ; position cursor
-            pop   rf              ; restore register
-            return
-            endp
-
-            
             ;-------------------------------------------------------
             ; Name: do_end
             ;
@@ -462,7 +415,7 @@ pup_skip:   return                  ; top row is new current row
             call  getcurln        ; get the current line
             call  window_size     ; get the window dimensions
             ghi   r9              ; get the window size in rows
-            smi   1               ; subtract one for status line
+            smi   2               ; subtract one for status line, another for index
             str   r2              ; save rows in M(X)
             glo   r8              ; get low byte of top line
             add                   ; add row size from to top row
@@ -478,7 +431,31 @@ pup_skip:   return                  ; top row is new current row
             ;-------------------------------------------------------                                  
             call  next_buffer 
             lbdf  pdwn_last       ; if no more buffers move to end
+
+            ldi   0               ; set to bottom of screen
+            phi   r8              ; from top line of buffer
+            call  window_size     ; get the window dimensions
+            ghi   r9              ; get the window size in rows
+            smi   2               ; subtract one for status line
+            plo   r8              ; set to bottom row on screen
             
+            call  get_num_lines   ; get number of lines in r9
+            dec   r9              ; line index is one less than number of lines
+            sub16 r9, r8          ; make enough lines in buffer for screen
+            lbdf  pdwn_good       ; we're good so draw it
+            call  get_num_lines   ; otherwise move to last line in buffer
+            dec   r9          
+            copy  r9, r8          ; set current line to last line  
+
+pdwn_good:  call  setcurln        ; set the current line in text buffer
+            call  set_cursor      ; move cursor to current line
+            call  find_line       ; find the line
+            ldn   ra              ; get the line size of new current line
+            smi   2               ; subtract CRLF
+            lbdf  pdwn_sz       
+            ldi   0               ; if less than zero, set to zero
+pdwn_sz:    phi   rb              ; set line size for new line
+
             call  o_inmsg
               db 27,'[2J',0       ; clear display
 
@@ -496,7 +473,7 @@ pdwn_ok:    call  setcurln        ; set the new currentline
             lbdf  pdwn_size       
             ldi   0               ; if less than zero, set to zero
 pdwn_size:  phi   rb              ; set line size for new line
-            call  scroll_down     ; calculate new row offset 
+            call  scroll_down     ; calculate new row offset
             return
             endp
 
@@ -523,6 +500,17 @@ pdwn_size:  phi   rb              ; set line size for new line
             call  prev_buffer 
             lbdf  up_skip           ; if no more buffers just skip
   
+            call  find_eob          ; move down to last line in buffer
+            dec   r8                ; go back to last text line
+            call  find_line         ; get the last line
+up_ok:      call  setcurln          ; set the new currentline
+            ldn   ra                ; get the line size of new current line
+            smi   2                 ; subtract CRLF
+            lbdf  up_sz       
+            ldi   0                 ; if less than zero, set to zero
+up_sz:      phi   rb                ; set line size for new line
+            call  scroll_down       ; calculate new row offset 
+    
             call  refresh_screen
             call  brws_status       ; restore the normal status messae
             call  prt_status
@@ -565,6 +553,19 @@ up_skip:    return
             call  next_buffer 
             lbdf  dwn_skip            ; if no more buffers, no move
   
+            ldi   0
+            phi   r8              ; set to top line of buffer
+            plo   r8
+            call  setcurln        ; set the current line in text buffer
+            call  set_row_offset  ; set row offset for the top of screen
+            call  set_cursor
+            call  find_line       ; find the line
+            ldn   ra              ; get the line size of new current line
+            smi   2               ; subtract CRLF
+            lbdf  dwn_sz       
+            ldi   0               ; if less than zero, set to zero
+dwn_sz:     phi   rb              ; set line size for new line
+
             call  o_inmsg
               db 27,'[2J',0           ; erase display
   
@@ -589,9 +590,6 @@ dwn_end:    pop   r9                  ; restore current line
             return
 
 dwn_skip:   call  getcurln            ; restore r8 
-            ldi   0                   
-            phi   rb                  ; set length to zero
-            plo   rb                  ; set current char position to zero
             lbr   dwn_end             ; and exit            
             endp
 
@@ -618,9 +616,10 @@ lft_up:     glo   r8            ; check for top of file
             ghi   r8          
             lbz   lft_exit      ; if r8 = 0, then don't move up
 
-lft_up2:    ldi   MAX_LINE      ; set to one past maximum column position
+lft_up2:    call  do_up         ; move up to end of previous line
+            ghi   rb            ; get length of next line
             plo   rb            ; set char position to maximum
-            call do_up          ; move up to end of previous line
+            call  scroll_right  ; move to end of line
 lft_exit:   return
             endp
             
@@ -638,14 +637,14 @@ lft_exit:   return
             ;-------------------------------------------------------                                                
             proc do_rght
             ghi   rb            ; get the line size
-            lbz   rght_exit     ; do nothing if empty line
+            lbz   rght_dwn      ; move down if empty line
             str   r2            ; save line size in M(X)
             glo   rb            ; get the current position
             sm                  ; subtract line size from char position
             lbdf  rght_dwn      ; move to beginning of next line
             inc   rb            ; otherwise increment char position
             call  scroll_right  ; scroll if needed, and adjust cursor              
-rght_exit:  return
+            return
 rght_dwn:   ldi   0             ; move to beginning column
             plo   rb
             call  do_down       ; move down to next line
@@ -683,12 +682,10 @@ ent_ins:    ldi   0             ; move to beginning column
             adi   4               ; add 4 to move past current tab stop
             ani   $FC             ; mask sum to snap to next tab stop
             plo   r9              ; save in scratch register
-            str   r2              ; save tab value in M(X)
-            ghi   rb              ; get line length
-            sm                    ; subtract next tab stop from column limit
-            lbnf  tab_exit        ; if (line length < tab stop), don't move cursor
+            smi   MAX_LINE        ; get line length
+            lbdf  tab_exit        ; if (tab stop >= max line length), don't move cursor
 
-tab_move:   ldx                   ; get next tab stop
+tab_move:   glo   r9              ; get next tab stop
             plo   rb              ; update cursor column
             call  scroll_right  
 tab_exit:   pop   r9
@@ -740,7 +737,20 @@ btab_end:   return
             ;-------------------------------------------------------                                  
             call  prev_buffer 
             lbdf  top_skip          ; if no more buffers just skip
-  
+            
+            ldi   0                 ; set current line to top
+            phi   r8
+            plo   r8
+            call  set_row_offset    ; set row offset for the top of screen            
+            call  setcurln          ; save the current line
+            call  find_line         ; get the current line
+            ldn   ra                ; get size of current line
+            smi   2                 ; adjust for one past last character
+            lbdf  top_sz            ; if positive, set length
+            ldi   0                 ; if negative, set length to zero
+top_sz:     phi   rb                ; set rb.1 to new size
+            call  scroll_up         ; set top row to new value
+            
             call  refresh_screen
             call  brws_status       ; restore the normal status messae
             call  prt_status
@@ -794,15 +804,15 @@ top_skip:   ldi   0                 ; set char position to far left
             call  next_buffer 
             lbdf  db_exit           ; if no more buffers, no move
   
+  
+            call  set_row_offset      ; set row offset for the top of screen
+            call  set_cursor
+
             call  o_inmsg
               db 27,'[2J',0         ; erase display
 
-            call  refresh_screen
             call  brws_status       ; restore the normal status messae
             call  prt_status
-            pop   r9
-            pop   rf                ; restore register
-            return                  ; if we loaded a new buffer we're done      
             
 db_move:    call  get_num_lines     ; get total number of lines in r8
             dec   r9                ; line index is one less than number of lines
@@ -888,71 +898,10 @@ dw_lnumbr:  push  rd              ; save msg pointer
             
             load  rf, num_buf     
 dw_lnum:    lda   rf              ; copy line number into msg buffer
-            lbz   dw_buffer        
+            lbz   dw_show        
             str   rd
             inc   rd
             lbr   dw_lnum            
-
-dw_buffer:  load  rf, fbuf_idx    ; get buffer index
-            ldn   rf                
-            lbz   dw_show         ; if no buffer, msg is done
-            plo   r9              ; save in r9 for conversion
-            ldi   0
-            phi   r9
-            
-dw_bmsg:    load  rf, dw_bftxt    ; buffer lead text  
-dw_bf:      lda   rf              ; copy text into msg buffer
-            lbz   dw_bfnum        ; before buffer number
-            str   rd
-            inc   rd
-            lbr   dw_bf
-
-dw_bfnum:   push  rd              ; save msg pointer
-            copy  r9, rd          ; copy buffer number for conversion
-            load  rf, num_buf     ; put result in number buffer
-            call  f_uintout       ; convert to integer ascii string
-            ldi   0               ; make sure null terminated
-            str   rf              
-            pop   rd              ; restore msg buffer pointer
-
-            load  rf, num_buf
-dw_bfnmbr:  lda   rf              ; copy buffer number into msg text
-            lbz   dw_brow         ; when done with buffer number, show row
-            str   rd
-            inc   rd
-            lbr   dw_bfnmbr       
-
-dw_brow:    load  rf, dw_brtxt    ; buffer row text  
-dw_br:      lda   rf              ; copy text into msg buffer
-            lbz   dw_row          ; before buffer row number
-            str   rd
-            inc   rd
-            lbr   dw_br
-
-dw_row:     push  rd              ; save msg pointer
-            call  getcurln        ; get current line index
-            copy  r8, rd          ; copy current line to convert to buffer value
-            inc   rd              ; add one to index
-            load  rf, num_buf     
-            call  f_uintout       ; convert to integer ascii string
-            ldi   0               ; make sure null terminated
-            str   rf              
-            pop   rd              ; restore msg pointer
-            
-            load  rf, num_buf     
-dw_rwnum:   lda   rf              ; copy line number into msg buffer
-            lbz   dw_bend         ; after number, add end message        
-            str   rd
-            inc   rd
-            lbr   dw_rwnum            
-
-dw_bend:    load  rf, dw_betxt    ; buffer end text  
-dw_be:      lda   rf              ; copy text into msg buffer
-            lbz   dw_show         ; until done
-            str   rd
-            inc   rd
-            lbr   dw_be
-
 
 dw_show:    ldi   0               ; make sure message ends in null
             str   rd
@@ -973,9 +922,6 @@ dw_show:    ldi   0               ; make sure message ends in null
             return
 dw_coltxt:    db 'Column ',0
 dw_lntxt:     db ', Line ',0
-dw_bftxt:     db ', Buffer ',0
-dw_brtxt:     db ' (Row ',0
-dw_betxt:     db ' of 96)',0
             endp
 
             ;-------------------------------------------------------
@@ -1030,8 +976,8 @@ dg_find:    load  rf, dg_seeking  ; show not found message
             call  set_status      ; in the status bar
             call  prt_status      
             
-            ghi   rd              ; check for number < 64
-            lbnz  dg_seek         ; > 64, seek line
+            ghi   rd              ; check for number < BUF_LINES
+            lbnz  dg_seek         ; > BUF_LINES, seek line
             glo   rd
             plo   re              ; save in scratch register
             smi   BUF_LINES + 1   ; check for buffer limit
@@ -1069,7 +1015,7 @@ dg_down:    call  getcurln        ; restore r8
             call  refresh_screen  ; refresh clean
             lbr   dg_exit         
 
-dg_seek:    copy  rd,ra           ; copy line number to seek
+dg_seek:    copy  rd, ra          ; copy line number to seek
             sub16 ra, BUF_MIDDLE  ; adjust line number to be in middle of buffer
             call  seek_lines      ; seek to new buffer
             lbdf  dg_missed       ; DF means EOF encountered 
@@ -1087,6 +1033,9 @@ dg_seek:    copy  rd,ra           ; copy line number to seek
             call  prt_status      
                         
             call  load_buffer     ; load the buffer with line
+            
+            copy  ra, r8          ; set number of lines in buffer
+            call  set_num_lines     
             sub16 ra, BUF_MIDDLE  ; check for sufficent lines in buffer
             lbnf  dg_missed       ; DF = 0, means too few lines 
             
@@ -1101,7 +1050,7 @@ dg_seek:    copy  rd,ra           ; copy line number to seek
 dg_missed:  load  rf, dg_noline   ; show buffering message
             call  set_status      ; in the status bar
             call  prt_status
-
+              
             load  rd, 1           ; reload line 1      
             lbr   dg_begin        ; load the beginning of file            
             
@@ -1360,51 +1309,6 @@ di_exit:    pop   rd            ; restore register
             return
             endp
 
-
-
-            ;-------------------------------------------------------
-            ; Quit, check the dirty flag and confirm before exit.
-            ; Parameters: (None) 
-            ; Uses: 
-            ;   rf - buffer pointer
-            ; Returns: 
-            ;   DF = 1, don't exit
-            ;   DF = 0, exit the program      
-            ;-------------------------------------------------------
-;            proc  do_quit
-;            push  rf              ; save register used
-;            call  is_dirty
-;            lbdf  dq_ask          ; if dirty, ask before exiting
-;            clc                   ; if not dirty, just say okay to exit  
-;            lbr   dq_exit
-;            
-;dq_ask:     load  rf, warn_str    ; set the status to the save file warning
-;            call  do_confirm      
-;            lbdf  dq_sure
-;            ldi   1               ; if no quit, exit with DF = 1
-;            stxd                  ; save No Quit DF value on stack
-;            lbr   dq_setdf        ; restore cursor after prompt
-;
-;dq_sure:    load  rf, sure_str    ; make sure to quit without saving
-;            call  do_confirm
-;            lbdf  dq_yesquit      ; if confirmed twice, quit without saving     
-;            ldi   1               ; save No Quit DF Value on stack             
-;            stxd 
-;            lbr   dq_setdf
-;            
-;dq_yesquit: ldi   0               ; save Quit DF value on stack
-;            stxd 
-;dq_setdf:   irx                   ; get DF from stack
-;            ldx 
-;            shr                   ; shift value into DF
-;dq_exit:    pop   rf
-;            return
-;
-;warn_str:     db 'Unsaved Changes!  Quit without Saving (Y/N)?', 0
-;sure_str:     db 'Are you sure (Y/N)?',0
-;            endp
-
-#ifdef  BRWS_HELP
             ;-------------------------------------------------------
             ; Name: do_help
             ;
@@ -1459,26 +1363,22 @@ di_exit:    pop   rd            ; restore register
             call   refresh_screen ; redraw screen
             call  brws_status     ; update the status message
             call  prt_status      ; update the status line  
-;            call  o_inmsg
-;              db 27,'[?25h',0     ; show cursor        
             pop   rf              ; restore register  
             return
             
-hlp_txt1:     db '+-------------------------------+------------------------------------+',13,10
-              db '| ^B, Home    Beginning of line | ^P, PgUp    Previous Screen        |',13,10
-              db '| ^D, Down    Move cursor Down  | ^Q, ^S      Quit                   |',13,10,0
-hlp_txt2:     db '| ^E, End     End of line       | ^R, Right   Move cursor Right      |',13,10
-              db '| ^F          Find text string  | ^T          Top, previous buffer   |',13,10
-              db '| ^G          Go to line number | ^U, Up      Move cursor Up         |',13,10,0
-hlp_txt3:     db '| ^I, Tab     Move to next tab  | ^W          Show Where in file     |',13,10
-              db '| ^L, Left    Move cursor Left  | ^Z          Bottom, next buffer    |',13,10,0
-hlp_txt4:     db '| ^M, Enter   Next line         | ^], Shift+Tab  Move to prevous tab |',13,10,0
-hlp_txt5:     db '| ^N, PgDn    Next screen       | ^?          Show this help text    |',13,10
-              db '+-------------------------------+------------------------------------+',13,10,0
+hlp_txt1:     db '+--------------------------------+-------------------------------------+',13,10
+              db '| ^B, Home     Beginning of line | ^P, PgUp     Page Up                |',13,10
+              db '| ^D, ^N, Down Move cursor Down  | ^X           Exit                   |',13,10,0
+hlp_txt2:     db '| ^E, End      End of line       | ^K,^R, Right Move cursor Right      |',13,10
+              db '| ^F           Find text string  | ^T           Top, previous buffer   |',13,10
+              db '| ^G           Go to line number | ^U, Up       Move cursor Up         |',13,10,0
+hlp_txt3:     db '| ^I, Tab      Move to next tab  | ^W           Show Where in file     |',13,10
+              db '| ^K, ^L, Left Move cursor Left  | ^Z           Bottom, next buffer    |',13,10,0
+hlp_txt4:     db '| ^M, Enter    Next line         | ^], Shift+Tab  Move to prevous tab  |',13,10,0
+hlp_txt5:     db '| ^O, PgDn     Page Down         | ^?, ^^       Show this help text    |',13,10
+              db '+--------------------------------+-------------------------------------+',13,10,0
 hlp_prmpt:    db ' Press any key',0                            
             endp
-            
-#endif            
             
             
 #ifdef  BRWS_DEBUG

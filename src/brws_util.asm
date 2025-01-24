@@ -9,7 +9,7 @@
 ; Also based on the Elf/OS edit program written by Michael H Riley
 ; available https://github.com/rileym65/Elf-Elfos-edit
 ; -------------------------------------------------------------------
-; Copyright 2021 by Gaston Williams
+; Copyright 2025 by Gaston Williams
 ; -------------------------------------------------------------------
 ; Based on software written by Michael H Riley
 ; Thanks to the author for making this code available.
@@ -92,8 +92,6 @@
 
             call  set_status_cmd  ; set the ANSI command for status location
                                     
-;            call  set_page        ; set the memory limit
-                                    
             ;------ Load file to edit
             call  load_buffer     ; file text buffer
             lbnf  old_file        ; if file exists, we can browse it
@@ -109,8 +107,12 @@
             call  do_input              
             lbr   bk_err          ; exit program
             
-old_file:   call  find_eob        ; get the number of lines into r8
-            lbdf  bk_mem_out      ; if out of memory, exit immediately
+old_file:   load  rf, e_state     ; check for out of memory error
+            ldn   rf              ; get state byte
+            ani   ERROR_BIT       ; check for error from loading file
+            lbnz   bk_mem_out     ; if error, show error message and exit       
+
+            call  find_eob        ; get the number of lines into r8
             call  set_num_lines   ; set the maximum line value in memory     
             ldi   0               ; set line counter to first line
             phi   r8
@@ -635,15 +637,8 @@ eof_exit:   pop   rf
             proc  scroll_up
             push  rf
             push  r9
-            glo   rb              ; get current character position
-            str   r2              ; save in M(X) for arithmetic
-            ghi   rb              ; get size of line
-            sm                    ; check character position
-            lbdf  sup_x_ok        ; if len >= char position, no change
-            ghi   rb              ; set current position to line length
-            plo   rb              
             
-sup_x_ok:   call  set_col_offset  ; set the column offset
+            call  set_col_offset  ; set the column offset
             load  rf, row_offset  ; top line index
             lda   rf              ; get high byte
             phi   r9            
@@ -683,16 +678,8 @@ no_upscrl:  call  set_cursor      ; update cursor position
             push  rc
             push  r9
             push  r8
-
-            glo   rb              ; get current character position
-            str   r2              ; save in M(X) for arithmetic
-            ghi   rb              ; get size of line
-            sm                    ; check character position
-            lbdf  sdn_x_ok        ; if len >= char position, no change
-            ghi   rb              ; set current position to line length
-            plo   rb              
-            
-sdn_x_ok:   call  set_col_offset  ; set the column offset
+          
+            call  set_col_offset  ; set the column offset
             load  rf, row_offset  ; top line index
             lda   rf              ; get high byte
             phi   r9            
@@ -938,7 +925,6 @@ ms_size:    phi   rb              ; set rb.1 to new size
             ;-------------------------------------------------------            
             proc  seek_screen
             push  rf              ; save registers used
-;            push  rd
             push  rc
             push  r9
 
@@ -987,7 +973,6 @@ ss_size:    phi   rb              ; set rb.1 to new size
             call  set_cursor      ; adjust the cursor position
             pop   r9              ; restore registers used
             pop   rc
-;            pop   rd
             pop   rf
             return
             endp
@@ -1109,58 +1094,6 @@ rf_size:    phi   rb              ; save line size in rb.1
             pop   rf
             return
             endp 
-
-
-
-            ;-------------------------------------------------------
-            ; Name: refresh_line
-            ;
-            ; Send the ANSI sequences and text to refresh a line 
-            ; on the screen.
-            ; 
-            ; Parameters: 
-            ;   r7 - cursor position
-            ; Uses:
-            ;   rf - buffer pointer 
-            ;   r7 - cursor position
-            ; Returns: (None)
-            ;-------------------------------------------------------            
-;            proc  refresh_line
-;            push  rf              
-;
-;            load  rf, line_buf    ; point to current line buffer
-;            lda   rf              ; get dirty flag
-;            lbz   rl_done         ; if no changes, exit 
-;            
-;            push  r7              ; save cursor position  
-;            
-;            ldi   0               ; clear out char counter
-;            plo   r7              ; set cursor position to beginning of line                          
-;
-;            call  o_inmsg
-;              db 27,'[?25l',0     ; hide cursor        
-;
-;            call  move_cursor     ; position cursor
-;
-;            call  o_inmsg
-;              db 27,'[2K',0       ; erase line
-;
-;            call  move_cursor     ; position cursor to beginning of line
-;
-;rl_next:    lda   rf              ; get character from buffer
-;            lbz   rl_eol          ; null marks the end of line
-;            call  o_type          ; print character to screen          
-;            lbr   rl_next
-;
-;rl_eol:     pop   r7              ; restore cursor position
-;            call  move_cursor     ; position cursor 
-;              
-;            call  o_inmsg
-;              db 27,'[?25h',0     ; show cursor        
-;
-;rl_done:    pop   rf              ; restore register
-;            return 
-;            endp  
 
 ; *******************************************************************
 ; ***                    Cursor Utilities                         ***
@@ -1329,77 +1262,6 @@ rf_size:    phi   rb              ; save line size in rb.1
 pos_x:        db 0,0,0,0,0
 pos_y:        db 0,0,0,0,0              
             endp
-
-; *******************************************************************
-; ***              Editor State Utilities                         ***
-; *******************************************************************
-
-            ;-------------------------------------------------------
-            ; Name: set_dirty
-            ;
-            ; Set the dirty bit in the editor state.
-            ; 
-            ; Parameters: (None) 
-            ; Uses:
-            ;   rf - buffer pointer 
-            ; Returns: (None)
-            ;-------------------------------------------------------            
-;            proc  set_dirty
-;            push  rf              ; save rf
-;            load  rf, e_state     ; get editor state byte  
-;            ldn   rf
-;            ori   DIRTY_BIT       ; set the dirty bit
-;            str   rf
-;            pop   rf
-;            return
-;            endp
-
-            ;-------------------------------------------------------
-            ; Name: clr_file_bits
-            ;
-            ; Clear the dirty bit and new file bit in the editor 
-            ; state after a file is saved.
-            ; 
-            ; Parameters: (None) 
-            ; Uses:
-            ;   rf - buffer pointer 
-            ; Returns: (None)
-            ;-------------------------------------------------------            
-;            proc  clr_file_bits
-;            push  rf              ; save rf
-;            load  rf, e_state     ; get editor state byte  
-;            ldn   rf
-;            ani   SAVED_MASK      ; clear the dirty bit
-;            str   rf
-;            pop   rf
-;            return
-;            endp
-
-            ;-------------------------------------------------------
-            ; Name: is_dirty
-            ;
-            ; Get the dirty bit in the editor state byte
-            ; 
-            ; Parameters: (None) 
-            ; Uses:
-            ;   rf - buffer pointer 
-            ; Returns: 
-            ;   DF = 1, file is dirty (changed since last save)
-            ;   DF = 0, file is not dirty (unchanged since last save)
-            ;-------------------------------------------------------            
-;            proc  is_dirty
-;            push  rf              ; save rf
-;            load  rf, e_state     ; get editor state byte  
-;            ldn   rf
-;            ani   DIRTY_BIT       ; check the dirty bit
-;            lbz   id_clean
-;            stc                   ; set DF to indicate dirty file buffer
-;            lbr   id_exit 
-;id_clean:   clc                   ; clear DF to indicate clean file buffer
-;id_exit:    pop   rf
-;            return
-;            endp
-            
 
 ; *******************************************************************
 ; ***            Editor Configuration Variables                   ***
@@ -1621,7 +1483,7 @@ ed_state:    db    0           ; editor state bits
             return
             
              
-stat_begin:   db 27,'[37;44m^Q=Exit ^S=Save *RB: ',0
+stat_begin:   db 27,'[37;44m^X=Exit *RB: ',0
 rb_hex:       db 0,0,0,0,0
 line_lbl:     db ' Ln: ',0
 line_nmbr:    db 0,0,0,0,0,0 
@@ -1799,9 +1661,6 @@ dbg_end:     db  27,'*',27,'[0m',0
             load  rf, status_cmd  ; move cursor to status line
             call  o_msg
 
-;            call  o_inmsg         ; set cursor for status line
-;              db 27,'[25;1H',0
-
             call  o_inmsg         ; set text colors to white on blue
               db 27,'[37;44m',0
 
@@ -1942,69 +1801,6 @@ si_end:     ldi   27              ; end message with 27,'[0m',0
             pop   rf
             return
             endp  
-
-            ;-------------------------------------------------------
-            ; Name: pad_line
-            ;
-            ; Pad the text in the line buffer with spaces.
-            ; 
-            ; Parameters: 
-            ;   D  - count of spaces to add to string
-            ;   rb.1 - current line length
-            ; Uses:
-            ;   rf - buffer pointer
-            ;   rc.0 - counter for bytes
-            ; Returns: 
-            ;   rb.1 - updated line length
-            ;-------------------------------------------------------            
-;            proc  pad_line
-;            plo   re              ; save count in Elf/OS scratch register
-;            push  rf              ; save registers used
-;            push  rc
-;            
-;            glo   re              ; set low byte to space count
-;            plo   rc
-;            phi   rc              ; save count in high byte for later
-;            
-;            load  rf, line_buf    ; set buffer pointer
-;            ldi   $FF             ; set dirty flag to true
-;            str   rf
-;            inc   rf              ; rf now points to buffer string
-;
-;pad_find:   lda   rf              ; find the null at end of buffer
-;            lbnz  pad_find
-;            dec   rf              ; back up to null 
-;            dec   rf              ; back up to CR                    
-;            dec   rf              ; back up to LF at end of buffer strign
-;            
-;pad_str:    glo   rc              ; get count value and check
-;            lbz   pad_done
-;            ldi   ' '             ; pad string with n spaces
-;            str   rf
-;            inc   rf
-;            dec   rc              ; count down
-;            lbr   pad_str
-;
-;            ; write 10,13,0 after last padded space          
-;pad_done:   ldi   13            ; write CR (10)
-;            str   rf
-;            inc   rf
-;            ldi   10            ; write LF (13)
-;            str   rf
-;            inc   rf
-;            ldi   0             ; write NULL
-;            str   rf
-;            
-;            ghi   rc            ; get count  
-;            str   r2            ; save count at M(X) 
-;            ghi   rb            ; add count to line length
-;            add
-;            phi   rb            ; save updated length  
-;        
-;            pop   rc            ; restore registers
-;            pop   rf            
-;            return
-;            endp
 
             ;-------------------------------------------------------
             ; Name: brws_status
@@ -2149,54 +1945,6 @@ ss_exit:    pop   r9          ; restore sratch registers
             pop   rd  
             return 
             endp
-
-            ;-------------------------------------------------------
-            ; Name: isfnchar
-            ;
-            ; Check if character is valid character for an
-            ; Elf/OS filename.
-            ;
-            ; Parameters: 
-            ;   D - char to check
-            ; Returns:
-            ;   DF = 1, if valid filename character
-            ;   DF = 0, if not valid
-            ;-------------------------------------------------------
-;            proc  is_fnchar
-;            stxd                  ; save character on stack
-;            smi   '!'             ; exclaimation is first valid character
-;            lbnf  cfn_bad         ; invalid characters before exclamation
-;            lbz   cfn_ok          ; exclamation is valid character
-;            smi   1               ; check for double quote
-;            lbz  cfn_bad          ; double quote is invalid 
-;            smi   8               ; next invalid character is asterisk
-;            lbnf  cfn_ok 
-;            lbz   cfn_bad         ; asterisk is invalid
-;            smi   3               ; next valid character is dash
-;            lbnf  cfn_bad         ; plus and comma are invalid
-;            lbz   cfn_ok          ; dash is valid
-;            smi   13              ; period, /, numbers 0 to 9 are valid
-;            lbnf  cfn_ok          ; characters before colon are okay
-;            smi   6               ; colon to question mark are invalid
-;            lbnf  cfn_bad
-;            smi   27              ; @, A-Z are valid characters
-;            lbnf  cfn_ok
-;            smi   3               ; [, \, ] are invalid
-;            lbnf  cfn_bad
-;            smi   29              ; caret,underscore, backtick, a - z are valid
-;            lbnf  cfn_ok 
-;            smi   3               ; tilde is only remaining valid char
-;            lbz   cfn_ok
-;            lbr   cfn_bad         ; everything else is not valid
-;cfn_ok:     ldi   1               ; valid character
-;            lskp
-;cfn_bad:    ldi   0               ; signal not valid
-;            shr                   ; shift result into DF
-;            irx                   ; recover original value
-;            ldx
-;            return                ; and return to caller
-;            endp           
-
 
             ;-------------------------------------------------------
             ; Name: set_status_cmd
@@ -2407,8 +2155,6 @@ mrk_err:    stc                       ; set DF to indicate error
             lbr   mrk_exit            ; exit with an error
             endp
 
-
-
             ;-------------------------------------------------------
             ; Name: move_buffer
             ;
@@ -2470,7 +2216,6 @@ mvb_skip:   pop   r7                  ; restore registers
             return                    
             endp
 
-
             ;-------------------------------------------------------
             ; Name: next_buffer
             ;
@@ -2529,14 +2274,19 @@ nb_load:    load  rf, buffer_msg      ; show a message
             
             call  load_buffer         ; load new buffer
             copy  ra, r8              ; copy number of lines in buffer 
-            call  set_num_lines       ; set the maximum line value in memory     
+            call  set_num_lines       ; set the maximum line value in memory
+            ;----- set position in calling logic     
             ldi   0                   ; set line counter to first line
             phi   r8
             plo   r8
-            phi   rb                  ; clear out line length and character position
-            plo   rb
-
+            
             call  setcurln            ; set the current line in text buffer
+            call  find_line
+            ldn   ra                  ; get size of current line
+            smi   2                   ; adjust for one past last character
+            lbdf  nb_size             ; if positive, set length
+            ldi   0                   ; if negative, set length to zero
+nb_size:    phi   rb                  ; set rb.1 to new size
             call  set_row_offset      ; set row offset for the top of screen
             call  set_cursor
             clc                       ; clear DF flag for return
@@ -2859,11 +2609,7 @@ cbl_exit:   pop   r9                  ; restore registers used
             ; Status message to save files. 
             ;-------------------------------------------------------            
             proc  exit_msg
-#ifdef  BRWS_HELP            
-save_txt:     db  '^Q=Quit ^?=Help ',0
-#else
-save_txt:     db  '^Q=Quit ',0
-#endif
+save_txt:     db  '^X=Exit ^?=Help ',0
             endp
 
             ;-------------------------------------------------------
