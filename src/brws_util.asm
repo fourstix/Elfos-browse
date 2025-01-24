@@ -92,8 +92,6 @@
 
             call  set_status_cmd  ; set the ANSI command for status location
                                     
-            call  set_page        ; set the memory limit
-                                    
             ;------ Load file to edit
             call  load_buffer     ; file text buffer
             lbnf  old_file        ; if file exists, we can browse it
@@ -109,8 +107,12 @@
             call  do_input              
             lbr   bk_err          ; exit program
             
-old_file:   call  find_eob        ; get the number of lines into r8
-            lbdf  bk_mem_out      ; if out of memory, exit immediately
+old_file:   load  rf, e_state     ; check for out of memory error
+            ldn   rf              ; get state byte
+            ani   ERROR_BIT       ; check for error from loading file
+            lbnz   bk_mem_out     ; if error, show error message and exit       
+
+            call  find_eob        ; get the number of lines into r8
             call  set_num_lines   ; set the maximum line value in memory     
             ldi   0               ; set line counter to first line
             phi   r8

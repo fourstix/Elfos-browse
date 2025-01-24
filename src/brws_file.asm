@@ -33,7 +33,6 @@
             extrn   readln
             extrn   readbyte
             extrn   k_char
-            extrn   pageLimit
             extrn   skipln
 
             
@@ -66,7 +65,6 @@ feob_lp:    lda   ra            ; get count
             inc   r8            ; increment line count
             lbr   feob_lp
 feob_done:  dec   ra            ; move back to end of buffer byte
-            call  check_page    ; check for out of memory to set flag
             return              ; and return
             endp
 
@@ -256,8 +254,9 @@ fs_exit:    pop   r9              ; restore registers
             ; Uses:
             ;   rf - pointer to text bytes
             ;   rd - pointer to file descripter
-            ;   ra - line count
             ;   rc.0 - byte count
+            ;   rb.1 - page limit
+            ;   ra - line count
             ;   r7.0 - flags register
             ; Returns:
             ;   ra.0 = count of lines
@@ -269,9 +268,14 @@ fs_exit:    pop   r9              ; restore registers
             push  rf            ; save registers used    
             push  rd
             push  rc
-            ; push  ra
+            push  rb
             push  r7  
 
+            load  rf, k_heap    ; check heap address
+            ldn   rf            ; get page for bottom of heap
+            smi   1             ; set memory limit to one page below
+            phi   rb            ; save page limit in rb.1
+            
             load  rf, fname
             load  rd, fildes    ; point to file descriptor     
             ldi   0             ; flags
@@ -308,13 +312,13 @@ loadnz:     ldi   13            ; write cr/lf to buffer
             phi   rf
             inc   ra            ; bump line count
             
-            ;----- check to see if we are out of memory  
-            push  ra            ; save line count
-            copy  rf, ra        ; check the current page
-            call  check_page    ; check that page is within memory
-            pop   ra            ; restore ra after check
-            lbdf  loaderr       ; if out of memory, terminate
-
+            ;----- check to see if we are out of memory after reading line
+            ghi   rf            ; check page for next line address
+            str   r2            ; save in M(X)
+            ghi   rb            ; get memory page limit 
+            sm                  ; current page - limit 
+            lbz  loaderr        ; at page limit, may not have enough memory for next line
+  
             ; check for max line count for buffer
             glo   ra
             smi   BUF_LINES
@@ -349,7 +353,7 @@ loaddn:     ldi   0             ; write termination
             call  o_close       ; close the file
             clc                 ; clear the DF flag
 new_kfile:  pop   r7            ; restore registers
-            ; pop   ra
+            pop   rb
             pop   rc
             pop   rd
             pop   rf
@@ -362,7 +366,7 @@ loaderr:    ldi   0             ; write termination
             ldn   rf
             ori   ERROR_BIT     ; set ERROR_BIT
             str   rf            ; save 
-            clc  
+            clc                   
             lbr   new_kfile     ; exit
             endp
 
@@ -570,65 +574,6 @@ skip_err:   pop   r7            ; restore registers
             pop   rf
             return
             endp
-
-            ;-------------------------------------------------------
-            ; Name: set_page
-            ;
-            ; Set the memory limit one page below the heap
-            ;
-            ; Parameters: (None)
-            ; Uses:
-            ;   rf - buffer pointer
-            ;   rd - memory address
-            ; Returns: (None) 
-            ;-------------------------------------------------------
-            proc  set_page
-            push  rf          ; save registers
-            push  rd  
-            
-            load  rf, K_HEAP    ; point to address for heap
-            
-            lda   rf            ; get hi byte of address
-            phi   rd            ; put in rd
-            lda   rf            ; get lo byte of address
-            plo   rd            ; rd points to bottom of heap
-            dec   rd            ; free memory is one byte below heap
-
-            load  rf, pageLimit ; point to memory limit variable
-            
-            ghi   rd            ; get page value of memory
-            smi   1             ; limit is one page below memory
-            str   rf            ; save limit in memory
-            
-            pop   rd          ; restore registers
-            pop   rf
-            return
-            endp
-
-            ;-------------------------------------------------------
-            ; Name: check_page
-            ;
-            ; Check text buffer against the memory page limitp
-            ;
-            ; Parameters:
-            ;   ra - pointer to end of text buffer
-            ; Uses:
-            ;   rf - buffer pointer
-            ; Returns: 
-            ;   DF = 1, memory limit reached (page >= limit)
-            ;   DF = 0, withim limit (page < limit)
-            ;-------------------------------------------------------
-            proc  check_page
-            push  rf
-            load  rf, pageLimit   ; get memory limit
-            ldn   rf              ; load memory limit value
-            str   r2              ; put limit in M(X) 
-            
-            ghi   ra              ; get page for end of text buffer
-            sm                    ; subtract limit from current page 
-            pop   rf
-            return
-            endp
             
             ; ***************************************
             ; ***      File and Data Buffers      ***
@@ -648,10 +593,6 @@ skip_err:   pop   r7            ; restore registers
               db      0,0,0,0
             endp  
 
-            proc  pageLimit
-              db      0         ; one page below heap
-            endp
-  
             proc  curline
               dw      0         ; current line variable
             endp
